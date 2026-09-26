@@ -1,0 +1,95 @@
+@import "@fontsource/ibm-plex-sans-arabic/latin-400.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-500.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-600.css";
+@import "@fontsource/ibm-plex-sans-arabic/latin-700.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-400.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-500.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-600.css";
+@import "@fontsource/ibm-plex-sans-arabic/arabic-700.css";
+@import "tailwindcss";
+
+@theme {
+  --color-rose: #af1e59;
+  --color-rose-deep: #8a1746;
+  --color-on-rose: #fff7f4;
+  --color-paper: #fbf7f4;
+  --color-card: #ffffff;
+  --color-ink: #1c1216;
+  --color-muted: #6e4e58;
+  --color-line: #e8d5db;
+  --color-rose-soft: #f6e6ec;
+  --font-sans: "IBM Plex Sans Arabic", "DejaVu Sans", "Segoe UI", sans-serif;
+  --radius-card: 1.75rem;
+  --radius-xl: 0.75rem;
+  --shadow-card: 0 12px 32px rgb(28 18 22 / 0.08);
+  --motion-quick: 150ms;
+  --motion-fast: 250ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    margin: 0;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-rose);
+    outline-offset: 2px;
+  }
+}
+
+.press {
+  transition: transform var(--motion-quick) var(--ease-smooth-out);
+}
+.press:active {
+  transform: scale(0.98);
+}
+
+.rise {
+  animation: rise var(--motion-fast) var(--ease-smooth-out);
+}
+
+.price-hero {
+  font-size: clamp(2.75rem, 14vw, 4.25rem);
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.safe-bottom {
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press,
+  .rise {
+    animation: none;
+    transition: none;
+  }
+  .press:active {
+    transform: none;
+  }
+}
