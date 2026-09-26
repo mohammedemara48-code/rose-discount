@@ -1,14 +1,28 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, ImagePlus } from "lucide-react";
+import { ImagePlus } from "lucide-react";
+import type { Point } from "@/lib/sticker-price";
 
-type Phase = "idle" | "opening" | "live" | "denied" | "failed";
+type Phase = "opening" | "live" | "denied" | "failed";
 
-export function Scanner({ onText }: { onText: (text: string) => void }) {
+export type ScanFrame = { canvas: HTMLCanvasElement; points: Point[] };
+
+function pointsOf(result: { getResultPoints: () => Array<{ getX: () => number; getY: () => number }> }): Point[] {
+  return result.getResultPoints().map((point) => ({ x: point.getX(), y: point.getY() }));
+}
+
+function snapshot(video: HTMLVideoElement): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth || 1;
+  canvas.height = video.videoHeight || 1;
+  canvas.getContext("2d")?.drawImage(video, 0, 0);
+  return canvas;
+}
+
+export function Scanner({ onText }: { onText: (text: string, frame?: ScanFrame) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const onTextRef = useRef(onText);
-  const [on, setOn] = useState(false);
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [phase, setPhase] = useState<Phase>("opening");
   const [photoError, setPhotoError] = useState("");
 
   useEffect(() => {
@@ -16,13 +30,11 @@ export function Scanner({ onText }: { onText: (text: string) => void }) {
   }, [onText]);
 
   useEffect(() => {
-    if (!on) return;
     const video = videoRef.current;
     if (!video) return;
 
     let cancelled = false;
     let controls: { stop: () => void } | undefined;
-    setPhase("opening");
 
     (async () => {
       try {
@@ -30,13 +42,14 @@ export function Scanner({ onText }: { onText: (text: string) => void }) {
         if (cancelled) return;
         const reader = new BrowserMultiFormatReader(undefined, {
           delayBetweenScanAttempts: 180,
-          delayBetweenScanSuccess: 700,
+          delayBetweenScanSuccess: 900,
         });
         const next = await reader.decodeFromConstraints(
           { audio: false, video: { facingMode: { ideal: "environment" } } },
           video,
           (result) => {
-            if (result) onTextRef.current(result.getText());
+            if (!result || !video.videoWidth) return;
+            onTextRef.current(result.getText(), { canvas: snapshot(video), points: pointsOf(result) });
           },
         );
         if (cancelled) {
@@ -49,7 +62,6 @@ export function Scanner({ onText }: { onText: (text: string) => void }) {
         if (cancelled) return;
         const name = err instanceof DOMException ? err.name : "";
         setPhase(name === "NotAllowedError" || name === "PermissionDeniedError" ? "denied" : "failed");
-        setOn(false);
       }
     })();
 
@@ -60,60 +72,48 @@ export function Scanner({ onText }: { onText: (text: string) => void }) {
       if (stream instanceof MediaStream) stream.getTracks().forEach((track) => track.stop());
       video.srcObject = null;
     };
-  }, [on]);
+  }, []);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
     setPhotoError("");
     const url = URL.createObjectURL(file);
     try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
       const { BrowserMultiFormatReader } = await import("@zxing/browser");
       const reader = new BrowserMultiFormatReader();
-      const result = await reader.decodeFromImageUrl(url);
-      onTextRef.current(result.getText());
+      const result = await reader.decodeFromImageElement(img);
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      canvas.getContext("2d")?.drawImage(img, 0, 0);
+      onTextRef.current(result.getText(), { canvas, points: pointsOf(result) });
     } catch {
-      setPhotoError("ما قدرنا نقرأ الكود من الصورة. قرّب الاستيكر أو اكتب الكود.");
+      setPhotoError("ما قدرنا نقرأ الكود من الصورة.");
     } finally {
       URL.revokeObjectURL(url);
       if (fileRef.current) fileRef.current.value = "";
     }
   }
 
-  return (
-    <section className="grid gap-3">
-      {on ? (
-        <div className="relative overflow-hidden rounded-card bg-ink">
-          <video ref={videoRef} className="aspect-square w-full object-cover" muted autoPlay playsInline />
-          <div className="pointer-events-none absolute inset-6 rounded-xl border-2 border-on-rose" />
-        </div>
-      ) : null}
+  const alert =
+    photoError ||
+    (phase === "denied" ? "اسمح للكاميرا من إعدادات المتصفح." : phase === "failed" ? "الكاميرا مش متاحة." : "");
 
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          className="press flex h-14 items-center justify-center gap-2 rounded-xl bg-rose px-3 text-base font-semibold text-on-rose"
-          onClick={() => {
-            setPhotoError("");
-            if (on) {
-              setOn(false);
-              setPhase("idle");
-              return;
-            }
-            setOn(true);
-          }}
-        >
-          <Camera className="size-5" aria-hidden="true" />
-          {on ? "إيقاف" : "الكاميرا"}
-        </button>
-        <button
-          type="button"
-          className="press flex h-14 items-center justify-center gap-2 rounded-xl border border-line bg-card px-3 text-base font-semibold text-ink"
-          onClick={() => fileRef.current?.click()}
-        >
-          <ImagePlus className="size-5" aria-hidden="true" />
-          صورة
-        </button>
-      </div>
+  return (
+    <div className="relative h-full overflow-hidden rounded-card bg-ink">
+      <video ref={videoRef} className="h-full w-full object-cover" muted autoPlay playsInline />
+      <div className="pointer-events-none absolute inset-8 rounded-xl border-2 border-on-rose" />
+      <button
+        type="button"
+        className="press absolute end-3 top-3 grid size-11 place-items-center rounded-xl bg-ink/70 text-on-rose"
+        aria-label="صورة"
+        onClick={() => fileRef.current?.click()}
+      >
+        <ImagePlus className="size-5" aria-hidden="true" />
+      </button>
       <input
         ref={fileRef}
         className="sr-only"
@@ -122,21 +122,11 @@ export function Scanner({ onText }: { onText: (text: string) => void }) {
         capture="environment"
         onChange={(event) => void onFile(event.target.files?.[0])}
       />
-      {phase === "denied" ? (
-        <p role="alert" className="rounded-xl bg-rose-soft px-3 py-3 text-sm text-ink">
-          المتصفح منع الكاميرا. اسمح بها من الإعدادات، أو اكتب الكود، أو ارفع صورة الاستيكر.
+      {alert ? (
+        <p role="alert" className="absolute inset-x-3 bottom-3 rounded-xl bg-paper/95 px-3 py-2 text-center text-sm text-ink">
+          {alert}
         </p>
       ) : null}
-      {phase === "failed" ? (
-        <p role="alert" className="rounded-xl bg-rose-soft px-3 py-3 text-sm text-ink">
-          الكاميرا مش متاحة هنا. اكتب الكود تحت، أو صوّر الاستيكر.
-        </p>
-      ) : null}
-      {photoError ? (
-        <p role="alert" className="rounded-xl bg-rose-soft px-3 py-3 text-sm text-ink">
-          {photoError}
-        </p>
-      ) : null}
-    </section>
+    </div>
   );
 }

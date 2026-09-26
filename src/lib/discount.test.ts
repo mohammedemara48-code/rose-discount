@@ -71,6 +71,16 @@ test("fg00089 needs sticker price then 10%", () => {
   assert.equal(result.quote.family, "fg");
 });
 
+test("fg01587 sticker 60 pays 54", () => {
+  const result = evaluate({ mode: "other", code: "FG01587", priceText: "60", allowOutOfRangeFg: false });
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.quote.code, "fg01587");
+  assert.equal(result.quote.original, 60);
+  assert.equal(result.quote.discount, 6);
+  assert.equal(result.quote.pay, 54);
+});
+
 test("fg015600 is in range", () => {
   const result = evaluate({ mode: "other", code: "fg015600", priceText: "100", allowOutOfRangeFg: false });
   assert.equal(result.ok, true);
